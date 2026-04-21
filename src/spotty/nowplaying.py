@@ -1,0 +1,29 @@
+import requests
+
+from .types import SpotifyToken, Track
+
+NOW_PLAYING_URL = "https://api.spotify.com/v1/me/player/currently-playing"
+
+
+def get_now_playing(token: SpotifyToken) -> Track | None:
+    r = requests.get(
+        NOW_PLAYING_URL,
+        headers={"Authorization": f"Bearer {token.access_token}"},
+        timeout=5,
+    )
+    if r.status_code == 204 or r.status_code == 200 and not r.content:
+        return None
+    r.raise_for_status()
+    data = r.json()
+    item = data.get("item")
+    if not item:
+        return None
+    artists = ", ".join(a["name"] for a in item.get("artists", []))
+    return Track(
+        id=item["id"],
+        title=item["name"],
+        artist=artists,
+        album=item.get("album", {}).get("name", ""),
+        is_playing=data.get("is_playing", False),
+        progress_ms=data.get("progress_ms") or 0,
+    )

@@ -14,7 +14,7 @@ RENDER_INTERVAL = 0.1
 
 
 @click.group(invoke_without_command=True)
-@click.version_option("1.0.0", prog_name="spotty")
+@click.version_option("0.0.2", prog_name="spotty")
 @click.option("--plain", is_flag=True, help="Show plain (non-synced) lyrics and exit.")
 @click.option(
     "--offset",
@@ -50,7 +50,7 @@ def init() -> None:
       1. Go to https://developer.spotify.com/dashboard
       2. Create an app
       3. Add http://127.0.0.1:8888/callback as a Redirect URI
-      4. Copy Client ID and Client Secret
+      4. Copy Client ID
     """
     click.echo("Spotify Lyrics — setup\n")
 
@@ -60,11 +60,6 @@ def init() -> None:
         "Spotify Client ID",
         default=existing.get("client_id", ""),
     )
-    client_secret = click.prompt(
-        "Spotify Client Secret",
-        default=existing.get("client_secret", ""),
-        hide_input=True,
-    )
     redirect_uri = click.prompt(
         "Redirect URI",
         default=existing.get("redirect_uri", "http://127.0.0.1:8888/callback"),
@@ -72,7 +67,6 @@ def init() -> None:
 
     cfg.save_config({
         "client_id": client_id,
-        "client_secret": client_secret,
         "redirect_uri": redirect_uri,
     })
 

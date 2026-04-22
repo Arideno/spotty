@@ -34,7 +34,7 @@ pip install -e .
 1. Go to [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
 2. Click **Create app**
 3. Set **Redirect URI** to `http://127.0.0.1:8888/callback`
-4. Copy your **Client ID** and **Client Secret**
+4. Copy your **Client ID**
 
 ### 2. Configure credentials
 
@@ -46,7 +46,6 @@ You will be prompted for:
 
 ```
 Spotify Client ID: <paste your client ID>
-Spotify Client Secret: <paste your client secret>
 Redirect URI [http://127.0.0.1:8888/callback]: <Enter to keep default>
 ```
 

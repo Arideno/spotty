@@ -1,7 +1,9 @@
 import base64
 import hashlib
 import json
+import os
 import secrets
+import tempfile
 import time
 import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -43,8 +45,12 @@ def _start_auth() -> SpotifyToken:
     redirect_uri = _require("redirect_uri")
     verifier = _code_verifier()
     challenge = _code_challenge(verifier)
-    state = secrets.token_hex(8)
-    port = int(redirect_uri.split(":")[-1].split("/")[0])
+    state = secrets.token_hex(16)
+
+    parsed = urlparse(redirect_uri)
+    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost"}:
+        raise RuntimeError("redirect_uri must use http://127.0.0.1:<port>/...")
+    port = parsed.port or 80
 
     params = urlencode({
         "client_id": client_id,
@@ -64,18 +70,18 @@ def _start_auth() -> SpotifyToken:
 
         def do_GET(self):
             qs = parse_qs(urlparse(self.path).query)
-            if "code" in qs:
+            if "code" in qs and qs.get("state", [""])[0] == state:
                 auth_code.append(qs["code"][0])
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b"<h2>Authenticated! You can close this tab.</h2>")
             else:
-                server_error.append(qs.get("error", ["unknown"])[0])
+                server_error.append(qs.get("error", ["state_mismatch"])[0])
                 self.send_response(400)
                 self.end_headers()
                 self.wfile.write(b"<h2>Authentication failed.</h2>")
 
-    httpd = HTTPServer(("localhost", port), Handler)
+    httpd = HTTPServer(("127.0.0.1", port), Handler)
     httpd.timeout = 120
 
     webbrowser.open(f"{AUTH_URL}?{params}")
@@ -108,12 +114,24 @@ def _start_auth() -> SpotifyToken:
 
 
 def _save_tokens(token: SpotifyToken) -> None:
-    cfg.CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    cfg.TOKEN_FILE.write_text(json.dumps({
+    cfg.CONFIG_DIR.mkdir(parents=True, exist_ok=True, mode=0o700)
+    payload = json.dumps({
         "access_token": token.access_token,
         "refresh_token": token.refresh_token,
         "expires_at": token.expires_at,
-    }))
+    }).encode()
+    fd, tmp = tempfile.mkstemp(dir=cfg.CONFIG_DIR, prefix=".tok.")
+    try:
+        os.write(fd, payload)
+        os.close(fd)
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, cfg.TOKEN_FILE)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
 
 
 def _load_tokens() -> SpotifyToken | None:

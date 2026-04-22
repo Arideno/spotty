@@ -3,6 +3,9 @@ import requests
 
 from .types import LyricLine
 
+_HEADERS = {"User-Agent": "spotty-cli/0.0.2"}
+_MAX_BYTES = 2_000_000
+
 
 def _clean_title(title: str) -> str:
     title = re.sub(r'\s*\(feat\..*?\)', '', title, flags=re.IGNORECASE)
@@ -26,8 +29,9 @@ def _try_lrclib_synced(artist: str, title: str) -> list[LyricLine] | None:
             "https://lrclib.net/api/get",
             params={"artist_name": artist, "track_name": title},
             timeout=5,
+            headers=_HEADERS,
         )
-        if not r.ok:
+        if not r.ok or len(r.content) > _MAX_BYTES:
             return None
         data = r.json()
         synced = data.get("syncedLyrics", "")
@@ -45,8 +49,9 @@ def _try_lrclib_plain(artist: str, title: str) -> str | None:
             "https://lrclib.net/api/get",
             params={"artist_name": artist, "track_name": title},
             timeout=5,
+            headers=_HEADERS,
         )
-        if not r.ok:
+        if not r.ok or len(r.content) > _MAX_BYTES:
             return None
         data = r.json()
         return (data.get("plainLyrics") or "").strip() or None
@@ -57,8 +62,8 @@ def _try_lrclib_plain(artist: str, title: str) -> str | None:
 def _try_lyrics_ovh(artist: str, title: str) -> str | None:
     try:
         url = f"https://api.lyrics.ovh/v1/{requests.utils.quote(artist)}/{requests.utils.quote(title)}"
-        r = requests.get(url, timeout=5)
-        if not r.ok:
+        r = requests.get(url, timeout=5, headers=_HEADERS)
+        if not r.ok or len(r.content) > _MAX_BYTES:
             return None
         data = r.json()
         lyrics = data.get("lyrics", "").strip()

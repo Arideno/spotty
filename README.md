@@ -8,6 +8,8 @@ Synchronized lyrics in your terminal for the currently playing Spotify track.
 - Auto-refreshes when track changes
 - Handles instrumental sections, multi-artist tracks, featured artists
 
+![spotty screenshot](screenshot.png)
+
 ## Requirements
 
 - Python 3.11+

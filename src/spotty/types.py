@@ -9,6 +9,7 @@ class Track:
     album: str
     is_playing: bool
     progress_ms: int = 0
+    duration_ms: int = 0
 
 
 @dataclass

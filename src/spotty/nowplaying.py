@@ -3,7 +3,7 @@ import requests
 from .types import SpotifyToken, Track
 
 NOW_PLAYING_URL = "https://api.spotify.com/v1/me/player/currently-playing"
-_UA = {"User-Agent": "spotty-cli/0.0.4"}
+_UA = {"User-Agent": "spotty-cli/0.0.5"}
 
 
 def get_now_playing(token: SpotifyToken) -> Track | None:
@@ -27,4 +27,5 @@ def get_now_playing(token: SpotifyToken) -> Track | None:
         album=item.get("album", {}).get("name", ""),
         is_playing=data.get("is_playing", False),
         progress_ms=data.get("progress_ms") or 0,
+        duration_ms=item.get("duration_ms") or 0,
     )

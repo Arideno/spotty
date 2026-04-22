@@ -27,6 +27,23 @@ def _current_index(lines: list[LyricLine], progress_ms: int) -> int:
     return bisect.bisect_right(times, progress_ms) - 1
 
 
+def _progress_bar(progress_ms: int, duration_ms: int, width: int) -> Text:
+    cur_s = progress_ms // 1000
+    dur_s = duration_ms // 1000 if duration_ms else 0
+    cur_str = f"{cur_s // 60}:{cur_s % 60:02d}"
+    dur_str = f"{dur_s // 60}:{dur_s % 60:02d}"
+    time_str = f"  {cur_str} / {dur_str}"
+    bar_width = max(width - len(time_str) - 4, 10)
+    filled = int(bar_width * progress_ms / duration_ms) if duration_ms else 0
+    filled = min(filled, bar_width)
+    t = Text(justify="center")
+    t.append("▓" * filled, style="green")
+    t.append("░" * (bar_width - filled), style="dim")
+    t.append(time_str, style="dim")
+    t.append("\n")
+    return t
+
+
 def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Text:
     t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")
@@ -35,7 +52,9 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
     if not track.is_playing:
         t.append("  [paused]", style="dim")
     t.append("\n")
-    t.append(f"{track.album}\n\n", style="dim")
+    t.append(f"{track.album}\n", style="dim")
+    t.append_text(_progress_bar(progress_ms, track.duration_ms, console.width or 80))
+    t.append("\n")
 
     if not lines:
         t.append("No synced lyrics found.", style="yellow")

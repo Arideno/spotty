@@ -3,7 +3,7 @@ import requests
 
 from .types import LyricLine
 
-_HEADERS = {"User-Agent": "spotty-cli/0.0.4"}
+_HEADERS = {"User-Agent": "spotty-cli/0.0.5"}
 _MAX_BYTES = 2_000_000
 
 

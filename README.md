@@ -91,7 +91,6 @@ Credentials are stored in `~/.config/spotty/config.json` after running `spotty i
 | Key | Required | Default | Description |
 |-----|----------|---------|-------------|
 | `client_id` | Yes | — | Spotify app client ID |
-| `client_secret` | Yes | — | Spotify app client secret |
 | `redirect_uri` | No | `http://127.0.0.1:8888/callback` | OAuth callback URI — must match your Spotify app settings |
 
 To update any value, re-run `spotty init`.

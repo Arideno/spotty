@@ -8,12 +8,17 @@ from .types import LyricLine, Track
 
 console = Console()
 
-CONTEXT_BEFORE = 4
-CONTEXT_AFTER = 12
-
-
 def clear_screen() -> None:
     console.clear()
+
+
+def _context_window(idx: int, total: int, term_height: int) -> tuple[int, int]:
+    available = max(term_height - 3, 10)
+    before = int(available * 0.4)
+    after = available - before - 1
+    start = max(0, idx - before)
+    end = min(total, idx + after + 1)
+    return start, end
 
 
 def _current_index(lines: list[LyricLine], progress_ms: int) -> int:
@@ -23,7 +28,7 @@ def _current_index(lines: list[LyricLine], progress_ms: int) -> int:
 
 
 def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Text:
-    t = Text()
+    t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")
     t.append(" — ")
     t.append(f"{track.title}\n", style="bold white")
@@ -34,11 +39,10 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
         return t
 
     idx = _current_index(lines, progress_ms)
-    start = max(0, idx - CONTEXT_BEFORE)
-    end = min(len(lines), idx + CONTEXT_AFTER + 1)
+    height = console.height or 24
+    start, end = _context_window(idx if idx >= 0 else 0, len(lines), height)
 
     if idx == -1:
-        end = min(len(lines), CONTEXT_AFTER + 1)
         for line in lines[:end]:
             t.append(f"   {line.text}\n", style="white")
         return t

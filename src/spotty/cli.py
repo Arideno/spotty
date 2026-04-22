@@ -14,7 +14,7 @@ RENDER_INTERVAL = 0.1
 
 
 @click.group(invoke_without_command=True)
-@click.version_option("0.0.2", prog_name="spotty")
+@click.version_option("0.0.3", prog_name="spotty")
 @click.option("--plain", is_flag=True, help="Show plain (non-synced) lyrics and exit.")
 @click.option(
     "--offset",
@@ -104,7 +104,7 @@ def _run_synced(offset: int = 0) -> None:
 
                     if track is None:
                         from rich.text import Text
-                        live.update(Text("Nothing currently playing on Spotify.", style="dim"))
+                        live.update(Text("Nothing currently playing on Spotify.", style="dim", justify="center"))
                         time.sleep(2)
                         last_id = None
                         fetched_at = 0.0
@@ -130,7 +130,7 @@ def _run_synced(offset: int = 0) -> None:
                     live.update(render_synced(current_track, synced_lines, effective_progress))
                 else:
                     from rich.text import Text
-                    t = Text()
+                    t = Text(justify="center")
                     t.append(f"{current_track.artist}", style="cyan")
                     t.append(" — ")
                     t.append(f"{current_track.title}\n\n", style="bold white")
@@ -144,3 +144,7 @@ def _run_synced(offset: int = 0) -> None:
                 live.update(Text(f"Error: {e}", style="red"))
 
             time.sleep(RENDER_INTERVAL)
+
+
+if __name__ == "__main__":
+    main()

@@ -98,5 +98,33 @@ class TestCurrentIndex(unittest.TestCase):
         self.assertEqual(_current_index(lines, 99999), 1)
 
 
+class TestContextWindow(unittest.TestCase):
+    def test_centers_active_line_at_40_percent(self):
+        from spotty.display import _context_window
+        # term_height=40 → available=37, before=14, after=22
+        start, end = _context_window(idx=20, total=50, term_height=40)
+        self.assertEqual(start, 6)   # 20 - 14
+        self.assertEqual(end, 43)    # 20 + 22 + 1
+
+    def test_clamps_at_start(self):
+        from spotty.display import _context_window
+        start, end = _context_window(idx=2, total=50, term_height=40)
+        self.assertEqual(start, 0)
+        self.assertEqual(end, 25)    # 2 + 22 + 1
+
+    def test_clamps_at_end(self):
+        from spotty.display import _context_window
+        start, end = _context_window(idx=48, total=50, term_height=40)
+        self.assertEqual(start, 34)  # 48 - 14
+        self.assertEqual(end, 50)
+
+    def test_small_terminal_uses_minimum(self):
+        from spotty.display import _context_window
+        # term_height=5 → available forced to min 10, before=4, after=5
+        start, end = _context_window(idx=20, total=50, term_height=5)
+        self.assertEqual(start, 16)  # 20 - 4
+        self.assertEqual(end, 26)    # 20 + 5 + 1
+
+
 if __name__ == "__main__":
     unittest.main()

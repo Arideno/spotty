@@ -44,6 +44,32 @@ def _progress_bar(progress_ms: int, duration_ms: int, width: int) -> Text:
     return t
 
 
+def render_no_track() -> Text:
+    return Text("Nothing currently playing on Spotify.", style="dim", justify="center")
+
+
+def render_plain(track: Track, lyrics: str | None) -> Text:
+    t = Text(justify="center")
+    t.append(f"{track.artist}", style="cyan")
+    t.append(" — ")
+    t.append(f"{track.title}\n\n", style="bold white")
+    t.append(lyrics if lyrics else "No lyrics found.", style="white" if lyrics else "yellow")
+    return t
+
+
+def render_error(e: Exception) -> Text:
+    return Text(f"Error: {e}", style="red")
+
+
+def render_loading(track: Track) -> Text:
+    t = Text(justify="center")
+    t.append(f"{track.artist}", style="cyan")
+    t.append(" — ")
+    t.append(f"{track.title}\n\n", style="bold white")
+    t.append("Loading lyrics…", style="dim")
+    return t
+
+
 def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Text:
     t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")

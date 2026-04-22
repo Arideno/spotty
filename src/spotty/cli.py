@@ -3,7 +3,7 @@ import time
 import click
 
 from . import config as cfg
-from .display import clear_screen, make_live, print_lyrics, render_synced
+from .display import clear_screen, make_live, print_lyrics, render_error, render_loading, render_no_track, render_plain, render_synced
 from .lyrics import fetch_lyrics, fetch_synced_lyrics
 from .nowplaying import get_now_playing
 from .spotify import get_valid_token
@@ -103,8 +103,7 @@ def _run_synced(offset: int = 0) -> None:
                     track = get_now_playing(token)
 
                     if track is None:
-                        from rich.text import Text
-                        live.update(Text("Nothing currently playing on Spotify.", style="dim", justify="center"))
+                        live.update(render_no_track())
                         time.sleep(2)
                         last_id = None
                         fetched_at = 0.0
@@ -116,6 +115,9 @@ def _run_synced(offset: int = 0) -> None:
 
                     if track.id != last_id:
                         last_id = track.id
+                        synced_lines = None
+                        plain_fallback = None
+                        live.update(render_loading(track))
                         synced_lines = fetch_synced_lyrics(track.artist, track.title)
                         plain_fallback = None if synced_lines else fetch_lyrics(track.artist, track.title)
 
@@ -129,19 +131,12 @@ def _run_synced(offset: int = 0) -> None:
                 if synced_lines:
                     live.update(render_synced(current_track, synced_lines, effective_progress))
                 else:
-                    from rich.text import Text
-                    t = Text(justify="center")
-                    t.append(f"{current_track.artist}", style="cyan")
-                    t.append(" — ")
-                    t.append(f"{current_track.title}\n\n", style="bold white")
-                    t.append(plain_fallback if plain_fallback else "No lyrics found.", style="white" if plain_fallback else "yellow")
-                    live.update(t)
+                    live.update(render_plain(current_track, plain_fallback))
 
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                from rich.text import Text
-                live.update(Text(f"Error: {e}", style="red"))
+                live.update(render_error(e))
 
             time.sleep(RENDER_INTERVAL)
 

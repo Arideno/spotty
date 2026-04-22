@@ -27,21 +27,23 @@ class TestFetchAll(unittest.TestCase):
         mock_get.side_effect = _url_mock(
             lrclib_data={"syncedLyrics": "[00:10.50] Hello world\n[00:15.00] Second line\n"}
         )
-        synced, plain = fetch_all("Artist", "Song")
+        synced, plain, source = fetch_all("Artist", "Song")
         self.assertIsNotNone(synced)
         self.assertEqual(len(synced), 2)
         self.assertEqual(synced[0].time_ms, 10500)
         self.assertEqual(synced[0].text, "Hello world")
         self.assertEqual(synced[1].time_ms, 15000)
+        self.assertEqual(source, "lrclib")
 
     @patch("spotty.lyrics.requests.get")
     def test_returns_plain_from_lrclib_when_no_synced(self, mock_get):
         mock_get.side_effect = _url_mock(
             lrclib_data={"plainLyrics": "Plain text lyrics"}
         )
-        synced, plain = fetch_all("Artist", "Song")
+        synced, plain, source = fetch_all("Artist", "Song")
         self.assertIsNone(synced)
         self.assertEqual(plain, "Plain text lyrics")
+        self.assertEqual(source, "lrclib")
 
     @patch("spotty.lyrics.requests.get")
     def test_returns_plain_from_ovh_when_lrclib_fails(self, mock_get):
@@ -49,9 +51,10 @@ class TestFetchAll(unittest.TestCase):
             lrclib_status=404,
             ovh_data={"lyrics": "OVH lyrics"},
         )
-        synced, plain = fetch_all("Artist", "Song")
+        synced, plain, source = fetch_all("Artist", "Song")
         self.assertIsNone(synced)
         self.assertEqual(plain, "OVH lyrics")
+        self.assertEqual(source, "lyrics.ovh")
 
     @patch("spotty.lyrics.requests.get")
     def test_prefers_lrclib_plain_over_ovh(self, mock_get):
@@ -59,15 +62,17 @@ class TestFetchAll(unittest.TestCase):
             lrclib_data={"plainLyrics": "lrclib plain"},
             ovh_data={"lyrics": "ovh plain"},
         )
-        _, plain = fetch_all("Artist", "Song")
+        _, plain, source = fetch_all("Artist", "Song")
         self.assertEqual(plain, "lrclib plain")
+        self.assertEqual(source, "lrclib")
 
     @patch("spotty.lyrics.requests.get")
     def test_returns_none_none_when_both_fail(self, mock_get):
         mock_get.side_effect = _url_mock(lrclib_status=404, ovh_status=404)
-        synced, plain = fetch_all("Artist", "Song")
+        synced, plain, source = fetch_all("Artist", "Song")
         self.assertIsNone(synced)
         self.assertIsNone(plain)
+        self.assertIsNone(source)
 
     @patch("spotty.lyrics.requests.get")
     def test_strips_featuring_from_title(self, mock_get):
@@ -138,6 +143,85 @@ class TestContextWindow(unittest.TestCase):
         start, end = _context_window(idx=20, total=50, term_height=5)
         self.assertEqual(start, 16)  # 20 - 4
         self.assertEqual(end, 26)    # 20 + 5 + 1
+
+
+class TestRenderPlain(unittest.TestCase):
+    def _make_track(self):
+        from spotty.types import Track
+        return Track(id="1", title="Song", artist="Artist", album="Album",
+                     is_playing=True, progress_ms=0, duration_ms=200000)
+
+    def test_source_label_present(self):
+        from spotty.display import render_plain
+        t = render_plain(self._make_track(), "Some lyrics", source="lrclib")
+        self.assertIn("lrclib", t.plain)
+
+    def test_source_none_omits_label(self):
+        from spotty.display import render_plain
+        t = render_plain(self._make_track(), "Some lyrics", source=None)
+        self.assertNotIn("lrclib", t.plain)
+        self.assertNotIn("lyrics.ovh", t.plain)
+
+    def test_no_lyrics_with_source(self):
+        from spotty.display import render_plain
+        t = render_plain(self._make_track(), None, source="lyrics.ovh")
+        self.assertIn("No lyrics found.", t.plain)
+        self.assertIn("lyrics.ovh", t.plain)
+
+    def test_long_lyrics_truncated_when_source_present(self):
+        from unittest.mock import patch
+        from spotty.display import render_plain
+        many_lines = "\n".join(f"line {i}" for i in range(100))
+        with patch("spotty.display.console") as mock_console:
+            mock_console.height = 20
+            t = render_plain(self._make_track(), many_lines, source="lrclib")
+        # max_lines = 20 - 5 = 15; plain text should not contain line 15+
+        self.assertNotIn("line 15", t.plain)
+        self.assertIn("lrclib", t.plain)
+
+    def test_long_lyrics_not_truncated_without_source(self):
+        from unittest.mock import patch
+        from spotty.display import render_plain
+        many_lines = "\n".join(f"line {i}" for i in range(100))
+        with patch("spotty.display.console") as mock_console:
+            mock_console.height = 20
+            t = render_plain(self._make_track(), many_lines, source=None)
+        self.assertIn("line 99", t.plain)
+
+
+class TestRenderSynced(unittest.TestCase):
+    def _make_track(self):
+        from spotty.types import Track
+        return Track(id="1", title="Song", artist="Artist", album="Album",
+                     is_playing=True, progress_ms=5000, duration_ms=200000)
+
+    def _make_lines(self, n=5):
+        return [LyricLine(i * 1000, f"line {i}") for i in range(n)]
+
+    def test_source_appended_at_bottom(self):
+        from spotty.display import render_synced
+        lines = self._make_lines()
+        t = render_synced(self._make_track(), lines, 2000, source="lrclib")
+        self.assertTrue(t.plain.rstrip().endswith("lrclib"))
+
+    def test_source_none_not_appended(self):
+        from spotty.display import render_synced
+        lines = self._make_lines()
+        t = render_synced(self._make_track(), lines, 2000, source=None)
+        self.assertNotIn("lrclib", t.plain)
+        self.assertNotIn("lyrics.ovh", t.plain)
+
+    def test_empty_lines_with_source(self):
+        from spotty.display import render_synced
+        t = render_synced(self._make_track(), [], 2000, source="lrclib")
+        self.assertIn("No synced lyrics found.", t.plain)
+        self.assertIn("lrclib", t.plain)
+
+    def test_before_first_line_with_source(self):
+        from spotty.display import render_synced
+        lines = [LyricLine(10000, "late start"), LyricLine(20000, "second")]
+        t = render_synced(self._make_track(), lines, 0, source="lrclib")
+        self.assertIn("lrclib", t.plain)
 
 
 if __name__ == "__main__":

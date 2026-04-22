@@ -14,7 +14,7 @@ RENDER_INTERVAL = 0.1
 
 
 @click.group(invoke_without_command=True)
-@click.version_option("0.0.5", prog_name="spotty")
+@click.version_option("0.0.6", prog_name="spotty")
 @click.option("--plain", is_flag=True, help="Show plain (non-synced) lyrics and exit.")
 @click.option(
     "--offset",
@@ -77,7 +77,7 @@ def init() -> None:
 def _run_once() -> None:
     token = get_valid_token()
     track = get_now_playing(token)
-    _, lyrics = fetch_all(track.artist, track.title) if track else (None, None)
+    _, lyrics, _ = fetch_all(track.artist, track.title) if track else (None, None, None)
     clear_screen()
     print_lyrics(track, lyrics)
 
@@ -87,6 +87,7 @@ def _run_synced(offset: int = 0) -> None:
     synced_lines: list[LyricLine] | None = None
     plain_fallback: str | None = None
     current_track: Track | None = None
+    lyrics_source: str | None = None
 
     fetched_progress_ms: int = 0
     fetched_at: float = 0.0
@@ -118,7 +119,7 @@ def _run_synced(offset: int = 0) -> None:
                         synced_lines = None
                         plain_fallback = None
                         live.update(render_loading(track))
-                        synced_lines, plain_fallback = fetch_all(track.artist, track.title)
+                        synced_lines, plain_fallback, lyrics_source = fetch_all(track.artist, track.title)
 
                 if current_track is None:
                     time.sleep(RENDER_INTERVAL)
@@ -128,9 +129,9 @@ def _run_synced(offset: int = 0) -> None:
                 effective_progress = fetched_progress_ms + elapsed_since_fetch + offset
 
                 if synced_lines:
-                    live.update(render_synced(current_track, synced_lines, effective_progress))
+                    live.update(render_synced(current_track, synced_lines, effective_progress, lyrics_source))
                 else:
-                    live.update(render_plain(current_track, plain_fallback))
+                    live.update(render_plain(current_track, plain_fallback, lyrics_source))
 
             except KeyboardInterrupt:
                 break

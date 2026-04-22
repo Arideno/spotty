@@ -6,6 +6,7 @@ Synchronized lyrics in your terminal for the currently playing Spotify track.
 - Falls back to plain lyrics via [lyrics.ovh](https://api.lyrics.ovh) if no synced lyrics found
 - Smooth display — progress interpolated between API polls (no jumping)
 - Auto-refreshes when track changes
+- Shows lyrics source (lrclib or lyrics.ovh) as a dim footer
 - Handles instrumental sections, multi-artist tracks, featured artists
 
 ![spotty demo](demo.gif)

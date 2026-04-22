@@ -48,12 +48,19 @@ def render_no_track() -> Text:
     return Text("Nothing currently playing on Spotify.", style="dim", justify="center")
 
 
-def render_plain(track: Track, lyrics: str | None) -> Text:
+def render_plain(track: Track, lyrics: str | None, source: str | None = None) -> Text:
     t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")
     t.append(" — ")
     t.append(f"{track.title}\n\n", style="bold white")
+    if lyrics and source:
+        max_lines = max((console.height or 24) - 5, 3)
+        lyric_lines = lyrics.splitlines()
+        if len(lyric_lines) > max_lines:
+            lyrics = "\n".join(lyric_lines[:max_lines])
     t.append(lyrics if lyrics else "No lyrics found.", style="white" if lyrics else "yellow")
+    if source:
+        t.append(f"\n\n{source}", style="dim")
     return t
 
 
@@ -70,7 +77,7 @@ def render_loading(track: Track) -> Text:
     return t
 
 
-def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Text:
+def render_synced(track: Track, lines: list[LyricLine], progress_ms: int, source: str | None = None) -> Text:
     t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")
     t.append(" — ")
@@ -84,15 +91,19 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
 
     if not lines:
         t.append("No synced lyrics found.", style="yellow")
+        if source:
+            t.append(f"\n\n{source}", style="dim")
         return t
 
     idx = _current_index(lines, progress_ms)
-    height = console.height or 24
+    height = (console.height or 24) - (4 if source else 0)
     start, end = _context_window(idx if idx >= 0 else 0, len(lines), height)
 
     if idx == -1:
         for line in lines[:end]:
             t.append(f"   {line.text}\n", style="white")
+        if source:
+            t.append(f"\n\n{source}", style="dim")
         return t
 
     for i in range(start, end):
@@ -106,6 +117,9 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
             t.append(f"   {line.text}\n", style="dim")
         else:
             t.append(f"   {line.text}\n", style="white")
+
+    if source:
+        t.append(f"\n\n{source}", style="dim")
 
     return t
 

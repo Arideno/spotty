@@ -3,14 +3,14 @@ import requests
 from .types import SpotifyToken, Track
 
 NOW_PLAYING_URL = "https://api.spotify.com/v1/me/player/currently-playing"
-_UA = {"User-Agent": "spotty-cli/0.0.5"}
+_UA = {"User-Agent": "spotty-cli/0.0.6"}
 
 
 def get_now_playing(token: SpotifyToken) -> Track | None:
     r = requests.get(
         NOW_PLAYING_URL,
         headers={**_UA, "Authorization": f"Bearer {token.access_token}"},
-        timeout=5,
+        timeout=15,
     )
     if r.status_code == 204 or r.status_code == 200 and not r.content:
         return None

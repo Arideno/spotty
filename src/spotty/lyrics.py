@@ -4,7 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .types import LyricLine
 
-_HEADERS = {"User-Agent": "spotty-cli/0.0.5"}
+_HEADERS = {"User-Agent": "spotty-cli/0.0.6"}
 _MAX_BYTES = 2_000_000
 
 
@@ -29,7 +29,7 @@ def _try_lrclib(artist: str, title: str) -> tuple[list[LyricLine] | None, str | 
         r = requests.get(
             "https://lrclib.net/api/get",
             params={"artist_name": artist, "track_name": title},
-            timeout=5,
+            timeout=15,
             headers=_HEADERS,
         )
         if not r.ok or len(r.content) > _MAX_BYTES:
@@ -46,7 +46,7 @@ def _try_lrclib(artist: str, title: str) -> tuple[list[LyricLine] | None, str | 
 def _try_lyrics_ovh(artist: str, title: str) -> str | None:
     try:
         url = f"https://api.lyrics.ovh/v1/{requests.utils.quote(artist)}/{requests.utils.quote(title)}"
-        r = requests.get(url, timeout=5, headers=_HEADERS)
+        r = requests.get(url, timeout=15, headers=_HEADERS)
         if not r.ok or len(r.content) > _MAX_BYTES:
             return None
         data = r.json()
@@ -56,12 +56,19 @@ def _try_lyrics_ovh(artist: str, title: str) -> str | None:
         return None
 
 
-def fetch_all(artist: str, title: str) -> tuple[list[LyricLine] | None, str | None]:
-    """Fetch lrclib and lyrics.ovh in parallel. Return (synced_lines, plain_text)."""
+def fetch_all(artist: str, title: str) -> tuple[list[LyricLine] | None, str | None, str | None]:
+    """Fetch lrclib and lyrics.ovh in parallel. Return (synced_lines, plain_text, source)."""
     clean = _clean_title(title)
     with ThreadPoolExecutor(max_workers=2) as executor:
         lrclib_fut = executor.submit(_try_lrclib, artist, clean)
         ovh_fut = executor.submit(_try_lyrics_ovh, artist, clean)
         synced, plain_lrclib = lrclib_fut.result()
         plain_ovh = ovh_fut.result()
-    return synced, plain_lrclib or plain_ovh
+
+    if synced:
+        return synced, plain_lrclib or plain_ovh, "lrclib"
+    if plain_lrclib:
+        return None, plain_lrclib, "lrclib"
+    if plain_ovh:
+        return None, plain_ovh, "lyrics.ovh"
+    return None, None, None

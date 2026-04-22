@@ -1,79 +1,93 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from spotty.lyrics import fetch_lyrics, fetch_synced_lyrics
+from spotty.lyrics import fetch_all
 from spotty.types import LyricLine
 
 
-class TestFetchSyncedLyrics(unittest.TestCase):
-    def _mock_response(self, status=200, json_data=None):
+def _url_mock(lrclib_data=None, lrclib_status=200, ovh_data=None, ovh_status=200):
+    def side_effect(url, **kwargs):
         mock = MagicMock()
-        mock.ok = status == 200
-        mock.status_code = status
-        mock.json.return_value = json_data or {}
+        mock.content = b"x"
+        if "lrclib.net" in url:
+            mock.ok = lrclib_status == 200
+            mock.status_code = lrclib_status
+            mock.json.return_value = lrclib_data or {}
+        else:
+            mock.ok = ovh_status == 200
+            mock.status_code = ovh_status
+            mock.json.return_value = ovh_data or {}
         return mock
+    return side_effect
+
+
+class TestFetchAll(unittest.TestCase):
+    @patch("spotty.lyrics.requests.get")
+    def test_returns_synced_lines(self, mock_get):
+        mock_get.side_effect = _url_mock(
+            lrclib_data={"syncedLyrics": "[00:10.50] Hello world\n[00:15.00] Second line\n"}
+        )
+        synced, plain = fetch_all("Artist", "Song")
+        self.assertIsNotNone(synced)
+        self.assertEqual(len(synced), 2)
+        self.assertEqual(synced[0].time_ms, 10500)
+        self.assertEqual(synced[0].text, "Hello world")
+        self.assertEqual(synced[1].time_ms, 15000)
 
     @patch("spotty.lyrics.requests.get")
-    def test_parses_lrc_format(self, mock_get):
-        mock_get.return_value = self._mock_response(json_data={
-            "syncedLyrics": "[00:10.50] Hello world\n[00:15.00] Second line\n"
-        })
-        lines = fetch_synced_lyrics("Artist", "Song")
-        self.assertIsNotNone(lines)
-        self.assertEqual(len(lines), 2)
-        self.assertEqual(lines[0].time_ms, 10500)
-        self.assertEqual(lines[0].text, "Hello world")
-        self.assertEqual(lines[1].time_ms, 15000)
+    def test_returns_plain_from_lrclib_when_no_synced(self, mock_get):
+        mock_get.side_effect = _url_mock(
+            lrclib_data={"plainLyrics": "Plain text lyrics"}
+        )
+        synced, plain = fetch_all("Artist", "Song")
+        self.assertIsNone(synced)
+        self.assertEqual(plain, "Plain text lyrics")
 
     @patch("spotty.lyrics.requests.get")
-    def test_returns_none_when_no_synced(self, mock_get):
-        mock_get.return_value = self._mock_response(json_data={"plainLyrics": "plain only"})
-        result = fetch_synced_lyrics("Artist", "Song")
-        self.assertIsNone(result)
+    def test_returns_plain_from_ovh_when_lrclib_fails(self, mock_get):
+        mock_get.side_effect = _url_mock(
+            lrclib_status=404,
+            ovh_data={"lyrics": "OVH lyrics"},
+        )
+        synced, plain = fetch_all("Artist", "Song")
+        self.assertIsNone(synced)
+        self.assertEqual(plain, "OVH lyrics")
 
     @patch("spotty.lyrics.requests.get")
-    def test_returns_none_on_404(self, mock_get):
-        mock_get.return_value = self._mock_response(status=404)
-        result = fetch_synced_lyrics("Artist", "Song")
-        self.assertIsNone(result)
+    def test_prefers_lrclib_plain_over_ovh(self, mock_get):
+        mock_get.side_effect = _url_mock(
+            lrclib_data={"plainLyrics": "lrclib plain"},
+            ovh_data={"lyrics": "ovh plain"},
+        )
+        _, plain = fetch_all("Artist", "Song")
+        self.assertEqual(plain, "lrclib plain")
+
+    @patch("spotty.lyrics.requests.get")
+    def test_returns_none_none_when_both_fail(self, mock_get):
+        mock_get.side_effect = _url_mock(lrclib_status=404, ovh_status=404)
+        synced, plain = fetch_all("Artist", "Song")
+        self.assertIsNone(synced)
+        self.assertIsNone(plain)
 
     @patch("spotty.lyrics.requests.get")
     def test_strips_featuring_from_title(self, mock_get):
-        mock_get.return_value = self._mock_response(json_data={
-            "syncedLyrics": "[00:01.00] Line"
-        })
-        fetch_synced_lyrics("Artist", "Song (feat. Someone)")
-        call_params = mock_get.call_args[1]["params"]
-        self.assertNotIn("feat", call_params["track_name"])
-
-
-class TestFetchLyrics(unittest.TestCase):
-    def _mock_response(self, status=200, json_data=None):
-        mock = MagicMock()
-        mock.ok = status == 200
-        mock.status_code = status
-        mock.json.return_value = json_data or {}
-        return mock
+        mock_get.side_effect = _url_mock(
+            lrclib_data={"syncedLyrics": "[00:01.00] Line"}
+        )
+        fetch_all("Artist", "Song (feat. Someone)")
+        lrclib_call = next(
+            c for c in mock_get.call_args_list if "lrclib.net" in c[0][0]
+        )
+        self.assertNotIn("feat", lrclib_call[1]["params"]["track_name"])
 
     @patch("spotty.lyrics.requests.get")
-    def test_returns_plain_lyrics_from_lrclib(self, mock_get):
-        mock_get.return_value = self._mock_response(json_data={"plainLyrics": "Plain text lyrics"})
-        result = fetch_lyrics("Artist", "Song")
-        self.assertEqual(result, "Plain text lyrics")
-
-    @patch("spotty.lyrics.requests.get")
-    def test_falls_back_to_ovh(self, mock_get):
-        fail = self._mock_response(status=404)
-        success = self._mock_response(json_data={"lyrics": "OVH lyrics"})
-        mock_get.side_effect = [fail, success]
-        result = fetch_lyrics("Artist", "Song")
-        self.assertEqual(result, "OVH lyrics")
-
-    @patch("spotty.lyrics.requests.get")
-    def test_returns_none_when_both_fail(self, mock_get):
-        mock_get.return_value = self._mock_response(status=404)
-        result = fetch_lyrics("Artist", "Song")
-        self.assertIsNone(result)
+    def test_single_lrclib_request(self, mock_get):
+        mock_get.side_effect = _url_mock(
+            lrclib_data={"syncedLyrics": "[00:01.00] Line", "plainLyrics": "plain"}
+        )
+        fetch_all("Artist", "Song")
+        lrclib_calls = [c for c in mock_get.call_args_list if "lrclib.net" in c[0][0]]
+        self.assertEqual(len(lrclib_calls), 1)
 
 
 class TestCurrentIndex(unittest.TestCase):

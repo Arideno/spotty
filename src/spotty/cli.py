@@ -4,7 +4,7 @@ import click
 
 from . import config as cfg
 from .display import clear_screen, make_live, print_lyrics, render_error, render_loading, render_no_track, render_plain, render_synced
-from .lyrics import fetch_lyrics, fetch_synced_lyrics
+from .lyrics import fetch_all
 from .nowplaying import get_now_playing
 from .spotify import get_valid_token
 from .types import LyricLine, Track
@@ -77,7 +77,7 @@ def init() -> None:
 def _run_once() -> None:
     token = get_valid_token()
     track = get_now_playing(token)
-    lyrics = fetch_lyrics(track.artist, track.title) if track else None
+    _, lyrics = fetch_all(track.artist, track.title) if track else (None, None)
     clear_screen()
     print_lyrics(track, lyrics)
 
@@ -118,8 +118,7 @@ def _run_synced(offset: int = 0) -> None:
                         synced_lines = None
                         plain_fallback = None
                         live.update(render_loading(track))
-                        synced_lines = fetch_synced_lyrics(track.artist, track.title)
-                        plain_fallback = None if synced_lines else fetch_lyrics(track.artist, track.title)
+                        synced_lines, plain_fallback = fetch_all(track.artist, track.title)
 
                 if current_track is None:
                     time.sleep(RENDER_INTERVAL)

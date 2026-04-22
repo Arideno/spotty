@@ -31,7 +31,10 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
     t = Text(justify="center")
     t.append(f"{track.artist}", style="cyan")
     t.append(" — ")
-    t.append(f"{track.title}\n", style="bold white")
+    t.append(f"{track.title}", style="bold white")
+    if not track.is_playing:
+        t.append("  [paused]", style="dim")
+    t.append("\n")
     t.append(f"{track.album}\n\n", style="dim")
 
     if not lines:
@@ -50,7 +53,10 @@ def render_synced(track: Track, lines: list[LyricLine], progress_ms: int) -> Tex
     for i in range(start, end):
         line = lines[i]
         if i == idx:
-            t.append(f"▶  {line.text}\n", style="bold yellow")
+            if track.is_playing:
+                t.append(f"▶  {line.text}\n", style="bold yellow")
+            else:
+                t.append(f"⏸  {line.text}\n", style="dim")
         elif i < idx:
             t.append(f"   {line.text}\n", style="dim")
         else:

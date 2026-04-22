@@ -14,7 +14,7 @@ RENDER_INTERVAL = 0.1
 
 
 @click.group(invoke_without_command=True)
-@click.version_option("0.0.3", prog_name="spotty")
+@click.version_option("0.0.4", prog_name="spotty")
 @click.option("--plain", is_flag=True, help="Show plain (non-synced) lyrics and exit.")
 @click.option(
     "--offset",
@@ -112,10 +112,10 @@ def _run_synced(offset: int = 0) -> None:
 
                     fetched_progress_ms = track.progress_ms
                     fetched_at = time.time()
+                    current_track = track
 
                     if track.id != last_id:
                         last_id = track.id
-                        current_track = track
                         synced_lines = fetch_synced_lyrics(track.artist, track.title)
                         plain_fallback = None if synced_lines else fetch_lyrics(track.artist, track.title)
 
@@ -123,7 +123,7 @@ def _run_synced(offset: int = 0) -> None:
                     time.sleep(RENDER_INTERVAL)
                     continue
 
-                elapsed_since_fetch = int((time.time() - fetched_at) * 1000) if fetched_at else 0
+                elapsed_since_fetch = int((time.time() - fetched_at) * 1000) if (fetched_at and current_track.is_playing) else 0
                 effective_progress = fetched_progress_ms + elapsed_since_fetch + offset
 
                 if synced_lines:

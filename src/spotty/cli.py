@@ -1,4 +1,9 @@
+import os
+import select
+import sys
+import termios
 import time
+import tty
 from concurrent.futures import Future, ThreadPoolExecutor
 
 import click
@@ -12,6 +17,35 @@ from .types import LyricLine, Track
 
 POLL_INTERVAL = 0.5
 RENDER_INTERVAL = 0.1
+
+
+def _setup_raw_stdin():
+    try:
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        tty.setcbreak(fd)
+        return old
+    except Exception:
+        return None
+
+
+def _restore_stdin(old) -> None:
+    if old is None:
+        return
+    try:
+        termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, old)
+    except Exception:
+        pass
+
+
+def _read_key() -> str | None:
+    try:
+        if not select.select([sys.stdin], [], [], 0)[0]:
+            return None
+        ch = os.read(sys.stdin.fileno(), 1)
+        return ch.decode("utf-8", errors="ignore") if ch else None
+    except Exception:
+        return None
 
 
 @click.group(invoke_without_command=True)
@@ -95,67 +129,81 @@ def _run_synced(offset: int = 0) -> None:
     lyrics_source: str | None = None
     fetch_future: Future | None = None
     fetch_for_id: str | None = None
+    live_offset: int = 0
 
     fetched_progress_ms: int = 0
     fetched_at: float = 0.0
     last_poll: float = 0.0
 
-    with make_live() as live, ThreadPoolExecutor(max_workers=1) as executor:
-        while True:
-            try:
-                now = time.time()
+    old_stdin = _setup_raw_stdin()
+    try:
+        with make_live() as live, ThreadPoolExecutor(max_workers=1) as executor:
+            while True:
+                try:
+                    now = time.time()
 
-                if now - last_poll >= POLL_INTERVAL:
-                    last_poll = now
-                    token = get_valid_token()
-                    track = get_now_playing(token)
+                    if now - last_poll >= POLL_INTERVAL:
+                        last_poll = now
+                        token = get_valid_token()
+                        track = get_now_playing(token)
 
-                    if track is None:
-                        live.update(render_no_track())
-                        time.sleep(2)
-                        last_id = None
-                        fetched_at = 0.0
+                        if track is None:
+                            live.update(render_no_track())
+                            time.sleep(2)
+                            last_id = None
+                            fetched_at = 0.0
+                            fetch_future = None
+                            fetch_for_id = None
+                            continue
+
+                        fetched_progress_ms = track.progress_ms
+                        fetched_at = time.time()
+                        current_track = track
+
+                        if track.id != last_id:
+                            last_id = track.id
+                            synced_lines = None
+                            plain_fallback = None
+                            lyrics_source = None
+                            fetch_for_id = track.id
+                            fetch_future = executor.submit(fetch_all, track.artist, track.title)
+                            live_offset = cache.get_offset(track.artist, track.title)
+
+                    if fetch_future is not None and fetch_future.done():
+                        if fetch_for_id == last_id:
+                            synced_lines, plain_fallback, lyrics_source = fetch_future.result()
                         fetch_future = None
-                        fetch_for_id = None
+
+                    key = _read_key()
+                    if key == "[" and current_track is not None:
+                        live_offset -= 100
+                        cache.put_offset(current_track.artist, current_track.title, live_offset)
+                    elif key == "]" and current_track is not None:
+                        live_offset += 100
+                        cache.put_offset(current_track.artist, current_track.title, live_offset)
+
+                    if current_track is None:
+                        time.sleep(RENDER_INTERVAL)
                         continue
 
-                    fetched_progress_ms = track.progress_ms
-                    fetched_at = time.time()
-                    current_track = track
+                    elapsed_since_fetch = int((time.time() - fetched_at) * 1000) if (fetched_at and current_track.is_playing) else 0
+                    effective_progress = fetched_progress_ms + elapsed_since_fetch + offset + live_offset
 
-                    if track.id != last_id:
-                        last_id = track.id
-                        synced_lines = None
-                        plain_fallback = None
-                        lyrics_source = None
-                        fetch_for_id = track.id
-                        fetch_future = executor.submit(fetch_all, track.artist, track.title)
+                    if synced_lines:
+                        live.update(render_synced(current_track, synced_lines, effective_progress, lyrics_source, live_offset=live_offset))
+                    elif fetch_future is not None:
+                        live.update(render_loading(current_track))
+                    else:
+                        live.update(render_plain(current_track, plain_fallback, lyrics_source))
 
-                if fetch_future is not None and fetch_future.done():
-                    if fetch_for_id == last_id:
-                        synced_lines, plain_fallback, lyrics_source = fetch_future.result()
-                    fetch_future = None
+                except KeyboardInterrupt:
+                    break
+                except Exception as e:
+                    live.update(render_error(e))
 
-                if current_track is None:
-                    time.sleep(RENDER_INTERVAL)
-                    continue
-
-                elapsed_since_fetch = int((time.time() - fetched_at) * 1000) if (fetched_at and current_track.is_playing) else 0
-                effective_progress = fetched_progress_ms + elapsed_since_fetch + offset
-
-                if synced_lines:
-                    live.update(render_synced(current_track, synced_lines, effective_progress, lyrics_source))
-                elif fetch_future is not None:
-                    live.update(render_loading(current_track))
-                else:
-                    live.update(render_plain(current_track, plain_fallback, lyrics_source))
-
-            except KeyboardInterrupt:
-                break
-            except Exception as e:
-                live.update(render_error(e))
-
-            time.sleep(RENDER_INTERVAL)
+                time.sleep(RENDER_INTERVAL)
+    finally:
+        _restore_stdin(old_stdin)
 
 
 if __name__ == "__main__":

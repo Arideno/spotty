@@ -8,6 +8,7 @@ Synchronized lyrics in your terminal for the currently playing Spotify track.
 - Auto-refreshes when track changes
 - Shows lyrics source (lrclib or lyrics.ovh) as a dim footer
 - Handles instrumental sections, multi-artist tracks, featured artists
+- Live offset calibration: press `[` / `]` during playback to shift lyrics 100ms earlier/later; persisted per-track
 
 ![spotty demo](demo.gif)
 
@@ -72,6 +73,11 @@ spotty --offset -200   # shift 200ms earlier
 # Bypass cache for one run
 spotty --no-cache
 
+# During synchronized playback, adjust timing live
+#   [   shift lyrics 100ms earlier
+#   ]   shift lyrics 100ms later
+# Offset is saved per-track and shown in the progress bar (+200ms or dim [ / ] hint)
+
 # Version
 spotty --version
 
@@ -108,7 +114,7 @@ To update any value, re-run `spotty init`.
 |------|---------|
 | `~/.config/spotty/config.json` | Credentials (also accepts optional `cache_dir`) |
 | `~/.config/spotty/tokens.json` | OAuth tokens (auto-managed) |
-| `~/.cache/spotty/lyrics.db` | SQLite lyrics cache (auto-managed, 30-day TTL) |
+| `~/.cache/spotty/lyrics.db` | SQLite lyrics cache and per-track offset calibrations (auto-managed, 30-day TTL) |
 
 Delete `tokens.json` to force re-authentication.
 
@@ -116,7 +122,7 @@ Delete `tokens.json` to force re-authentication.
 
 1. **Auth** — OAuth2 PKCE flow, no client secret needed in the token exchange
 2. **Now playing** — polls `GET /me/player/currently-playing` every 500ms
-3. **Lyrics** — checks SQLite cache first (`~/.cache/spotty/lyrics.db`, 30-day TTL); on miss fetches from lrclib.net and lyrics.ovh in parallel, then stores the result
+3. **Lyrics** — checks SQLite cache first (`~/.cache/spotty/lyrics.db`, 30-day TTL); on miss fetches from lrclib.net and lyrics.ovh in parallel, then stores the result. Per-track offset calibrations are loaded from the same cache on each track change and written back on each `[`/`]` press.
 4. **Display** — interpolates playback position between polls using the local clock for smooth highlighting
 
 ## Development

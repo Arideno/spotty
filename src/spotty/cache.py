@@ -30,11 +30,22 @@ CREATE TABLE IF NOT EXISTS lyrics (
 )
 """
 
+_CREATE_OFFSETS = """
+CREATE TABLE IF NOT EXISTS offsets (
+    artist     TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    offset_ms  INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (artist, title)
+)
+"""
+
 
 def _connect() -> sqlite3.Connection:
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(_DB_PATH)
     conn.execute(_CREATE)
+    conn.execute(_CREATE_OFFSETS)
     return conn
 
 
@@ -80,5 +91,40 @@ def put(
                 "INSERT OR REPLACE INTO lyrics (artist, title, synced, plain, source, fetched_at) VALUES (?,?,?,?,?,?)",
                 (artist, title, synced_json, plain, source, int(time.time())),
             )
+    except Exception:
+        pass
+
+
+def get_offset(artist: str, title: str) -> int:
+    if not _enabled:
+        return 0
+    try:
+        with _connect() as conn:
+            row = conn.execute(
+                "SELECT offset_ms FROM offsets WHERE artist=? AND title=?",
+                (artist, title),
+            ).fetchone()
+        if row is None:
+            return 0
+        return int(row[0])
+    except Exception:
+        return 0
+
+
+def put_offset(artist: str, title: str, offset_ms: int) -> None:
+    if not _enabled:
+        return
+    try:
+        with _connect() as conn:
+            if offset_ms == 0:
+                conn.execute(
+                    "DELETE FROM offsets WHERE artist=? AND title=?",
+                    (artist, title),
+                )
+            else:
+                conn.execute(
+                    "INSERT OR REPLACE INTO offsets (artist, title, offset_ms, updated_at) VALUES (?,?,?,?)",
+                    (artist, title, offset_ms, int(time.time())),
+                )
     except Exception:
         pass

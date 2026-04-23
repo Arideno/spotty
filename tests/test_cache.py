@@ -90,5 +90,34 @@ class TestCacheDisable(_CacheTestBase):
         self.assertEqual(cache_mod.get("Artist", "Song"), (None, None, None))
 
 
+class TestCacheOffset(_CacheTestBase):
+    def test_miss_returns_zero(self):
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), 0)
+
+    def test_hit_returns_stored_value(self):
+        cache_mod.put_offset("Artist", "Song", 300)
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), 300)
+
+    def test_negative_offset_roundtrips(self):
+        cache_mod.put_offset("Artist", "Song", -200)
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), -200)
+
+    def test_put_zero_removes_row(self):
+        cache_mod.put_offset("Artist", "Song", 100)
+        cache_mod.put_offset("Artist", "Song", 0)
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), 0)
+
+    def test_disabled_get_returns_zero(self):
+        cache_mod.put_offset("Artist", "Song", 500)
+        cache_mod.disable()
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), 0)
+
+    def test_disabled_put_is_noop(self):
+        cache_mod.disable()
+        cache_mod.put_offset("Artist", "Song", 400)
+        cache_mod._enabled = True
+        self.assertEqual(cache_mod.get_offset("Artist", "Song"), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

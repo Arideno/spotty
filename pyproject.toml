@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "spotty-cli"
-version = "0.0.6"
+dynamic = ["version"]
 description = "Synchronized lyrics in your terminal for the currently playing Spotify track"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -36,6 +36,9 @@ spotty = "spotty.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0"]
+
+[tool.hatch.version]
+path = "src/spotty/__init__.py"
 
 [tool.hatch.build.targets.sdist]
 exclude = ["CLAUDE.md", ".claude", ".omc", ".pytest_cache", "tests", "dist"]

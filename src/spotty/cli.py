@@ -1,8 +1,9 @@
 import time
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import click
 
-from . import config as cfg
+from . import cache, config as cfg
 from .display import clear_screen, make_live, print_lyrics, render_error, render_loading, render_no_track, render_plain, render_synced
 from .lyrics import fetch_all
 from .nowplaying import get_now_playing
@@ -23,8 +24,9 @@ RENDER_INTERVAL = 0.1
     metavar="MS",
     help="Shift lyrics by MS milliseconds. Positive = later, negative = earlier.",
 )
+@click.option("--no-cache", is_flag=True, help="Disable lyrics cache for this run.")
 @click.pass_context
-def main(ctx: click.Context, plain: bool, offset: int) -> None:
+def main(ctx: click.Context, plain: bool, offset: int, no_cache: bool) -> None:
     """Display synchronized lyrics for the currently playing Spotify track.
 
     \b
@@ -34,6 +36,9 @@ def main(ctx: click.Context, plain: bool, offset: int) -> None:
     Config:   ~/.config/spotty/config.json
     Tokens:   ~/.config/spotty/tokens.json
     """
+    if no_cache or cfg.get("cache_enabled") is False:
+        cache.disable()
+
     if ctx.invoked_subcommand is None:
         if plain:
             _run_once()
@@ -88,12 +93,14 @@ def _run_synced(offset: int = 0) -> None:
     plain_fallback: str | None = None
     current_track: Track | None = None
     lyrics_source: str | None = None
+    fetch_future: Future | None = None
+    fetch_for_id: str | None = None
 
     fetched_progress_ms: int = 0
     fetched_at: float = 0.0
     last_poll: float = 0.0
 
-    with make_live() as live:
+    with make_live() as live, ThreadPoolExecutor(max_workers=1) as executor:
         while True:
             try:
                 now = time.time()
@@ -108,6 +115,8 @@ def _run_synced(offset: int = 0) -> None:
                         time.sleep(2)
                         last_id = None
                         fetched_at = 0.0
+                        fetch_future = None
+                        fetch_for_id = None
                         continue
 
                     fetched_progress_ms = track.progress_ms
@@ -118,8 +127,14 @@ def _run_synced(offset: int = 0) -> None:
                         last_id = track.id
                         synced_lines = None
                         plain_fallback = None
-                        live.update(render_loading(track))
-                        synced_lines, plain_fallback, lyrics_source = fetch_all(track.artist, track.title)
+                        lyrics_source = None
+                        fetch_for_id = track.id
+                        fetch_future = executor.submit(fetch_all, track.artist, track.title)
+
+                if fetch_future is not None and fetch_future.done():
+                    if fetch_for_id == last_id:
+                        synced_lines, plain_fallback, lyrics_source = fetch_future.result()
+                    fetch_future = None
 
                 if current_track is None:
                     time.sleep(RENDER_INTERVAL)
@@ -130,6 +145,8 @@ def _run_synced(offset: int = 0) -> None:
 
                 if synced_lines:
                     live.update(render_synced(current_track, synced_lines, effective_progress, lyrics_source))
+                elif fetch_future is not None:
+                    live.update(render_loading(current_track))
                 else:
                     live.update(render_plain(current_track, plain_fallback, lyrics_source))
 

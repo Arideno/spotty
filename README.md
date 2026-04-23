@@ -69,6 +69,9 @@ spotty --plain
 spotty --offset 300    # shift 300ms later
 spotty --offset -200   # shift 200ms earlier
 
+# Bypass cache for one run
+spotty --no-cache
+
 # Version
 spotty --version
 
@@ -82,6 +85,7 @@ spotty --help
 |--------|---------|-------------|
 | `--plain` | off | Show plain (non-synced) lyrics and exit |
 | `--offset MS` | `0` | Shift lyrics by MS milliseconds. Positive = later, negative = earlier |
+| `--no-cache` | off | Bypass the lyrics cache for this run |
 | `--version` | — | Show version and exit |
 | `--help` | — | Show help and exit |
 
@@ -93,6 +97,8 @@ Credentials are stored in `~/.config/spotty/config.json` after running `spotty i
 |-----|----------|---------|-------------|
 | `client_id` | Yes | — | Spotify app client ID |
 | `redirect_uri` | No | `http://127.0.0.1:8888/callback` | OAuth callback URI — must match your Spotify app settings |
+| `cache_dir` | No | `~/.cache/spotty` | Override lyrics cache directory |
+| `cache_enabled` | No | `true` | Set to `false` to permanently disable the lyrics cache |
 
 To update any value, re-run `spotty init`.
 
@@ -100,8 +106,9 @@ To update any value, re-run `spotty init`.
 
 | File | Purpose |
 |------|---------|
-| `~/.config/spotty/config.json` | Credentials |
+| `~/.config/spotty/config.json` | Credentials (also accepts optional `cache_dir`) |
 | `~/.config/spotty/tokens.json` | OAuth tokens (auto-managed) |
+| `~/.cache/spotty/lyrics.db` | SQLite lyrics cache (auto-managed, 30-day TTL) |
 
 Delete `tokens.json` to force re-authentication.
 
@@ -109,7 +116,7 @@ Delete `tokens.json` to force re-authentication.
 
 1. **Auth** — OAuth2 PKCE flow, no client secret needed in the token exchange
 2. **Now playing** — polls `GET /me/player/currently-playing` every 500ms
-3. **Lyrics** — fetches LRC-timed lyrics from lrclib.net; falls back to lyrics.ovh for plain text
+3. **Lyrics** — checks SQLite cache first (`~/.cache/spotty/lyrics.db`, 30-day TTL); on miss fetches from lrclib.net and lyrics.ovh in parallel, then stores the result
 4. **Display** — interpolates playback position between polls using the local clock for smooth highlighting
 
 ## Development

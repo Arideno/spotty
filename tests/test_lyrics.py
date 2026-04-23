@@ -22,6 +22,16 @@ def _url_mock(lrclib_data=None, lrclib_status=200, ovh_data=None, ovh_status=200
 
 
 class TestFetchAll(unittest.TestCase):
+    def setUp(self):
+        self._p_get = patch("spotty.lyrics.cache.get", return_value=(None, None, None))
+        self._p_put = patch("spotty.lyrics.cache.put")
+        self._p_get.start()
+        self._p_put.start()
+
+    def tearDown(self):
+        self._p_get.stop()
+        self._p_put.stop()
+
     @patch("spotty.lyrics.requests.get")
     def test_returns_synced_lines(self, mock_get):
         mock_get.side_effect = _url_mock(
@@ -93,6 +103,54 @@ class TestFetchAll(unittest.TestCase):
         fetch_all("Artist", "Song")
         lrclib_calls = [c for c in mock_get.call_args_list if "lrclib.net" in c[0][0]]
         self.assertEqual(len(lrclib_calls), 1)
+
+
+class TestFetchAllCacheDisabled(unittest.TestCase):
+    def setUp(self):
+        from spotty import cache as cache_mod
+        self._cache_mod = cache_mod
+        cache_mod._enabled = False
+
+    def tearDown(self):
+        self._cache_mod._enabled = True
+
+    @patch("spotty.lyrics.requests.get")
+    def test_http_called_when_cache_disabled(self, mock_get):
+        mock_get.side_effect = _url_mock(lrclib_data={"plainLyrics": "live lyrics"})
+        _, plain, _ = fetch_all("Artist", "Song")
+        self.assertEqual(plain, "live lyrics")
+        lrclib_calls = [c for c in mock_get.call_args_list if "lrclib.net" in c[0][0]]
+        self.assertEqual(len(lrclib_calls), 1)
+
+
+class TestFetchAllCachedSuffix(unittest.TestCase):
+    @patch("spotty.lyrics.cache.get")
+    def test_cache_hit_appends_cached_suffix(self, mock_cache_get):
+        mock_cache_get.return_value = (None, "lyrics text", "lrclib")
+        _, plain, source = fetch_all("Artist", "Song")
+        self.assertEqual(source, "lrclib [cached]")
+        self.assertEqual(plain, "lyrics text")
+
+    @patch("spotty.lyrics.cache.get")
+    def test_cache_hit_lyrics_ovh_appends_cached_suffix(self, mock_cache_get):
+        mock_cache_get.return_value = (None, "ovh lyrics", "lyrics.ovh")
+        _, plain, source = fetch_all("Artist", "Song")
+        self.assertEqual(source, "lyrics.ovh [cached]")
+
+    @patch("spotty.lyrics.cache.get")
+    def test_cache_hit_none_source_stays_none(self, mock_cache_get):
+        mock_cache_get.return_value = (None, "some text", None)
+        _, _, source = fetch_all("Artist", "Song")
+        self.assertIsNone(source)
+
+    @patch("spotty.lyrics.cache.put")
+    @patch("spotty.lyrics.requests.get")
+    def test_live_fetch_no_cached_suffix(self, mock_get, mock_put):
+        mock_get.side_effect = _url_mock(lrclib_data={"plainLyrics": "live"})
+        with patch("spotty.lyrics.cache.get", return_value=(None, None, None)):
+            _, _, source = fetch_all("Artist", "Song")
+        self.assertEqual(source, "lrclib")
+        self.assertNotIn("[cached]", source)
 
 
 class TestCurrentIndex(unittest.TestCase):

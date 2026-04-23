@@ -2,6 +2,7 @@ import re
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
+from . import cache
 from .types import LyricLine
 
 _HEADERS = {"User-Agent": "spotty-cli/0.0.6"}
@@ -59,6 +60,12 @@ def _try_lyrics_ovh(artist: str, title: str) -> str | None:
 def fetch_all(artist: str, title: str) -> tuple[list[LyricLine] | None, str | None, str | None]:
     """Fetch lrclib and lyrics.ovh in parallel. Return (synced_lines, plain_text, source)."""
     clean = _clean_title(title)
+
+    cached = cache.get(artist, clean)
+    if cached != (None, None, None):
+        synced, plain, source = cached
+        return synced, plain, f"{source} [cached]" if source else source
+
     with ThreadPoolExecutor(max_workers=2) as executor:
         lrclib_fut = executor.submit(_try_lrclib, artist, clean)
         ovh_fut = executor.submit(_try_lyrics_ovh, artist, clean)
@@ -66,9 +73,13 @@ def fetch_all(artist: str, title: str) -> tuple[list[LyricLine] | None, str | No
         plain_ovh = ovh_fut.result()
 
     if synced:
-        return synced, plain_lrclib or plain_ovh, "lrclib"
-    if plain_lrclib:
-        return None, plain_lrclib, "lrclib"
-    if plain_ovh:
-        return None, plain_ovh, "lyrics.ovh"
-    return None, None, None
+        result = synced, plain_lrclib or plain_ovh, "lrclib"
+    elif plain_lrclib:
+        result = None, plain_lrclib, "lrclib"
+    elif plain_ovh:
+        result = None, plain_ovh, "lyrics.ovh"
+    else:
+        return None, None, None
+
+    cache.put(artist, clean, *result)
+    return result

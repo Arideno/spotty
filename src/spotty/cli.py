@@ -15,7 +15,7 @@ RENDER_INTERVAL = 0.1
 
 
 @click.group(invoke_without_command=True)
-@click.version_option("0.0.6", prog_name="spotty")
+@click.version_option(package_name="spotty-cli", prog_name="spotty")
 @click.option("--plain", is_flag=True, help="Show plain (non-synced) lyrics and exit.")
 @click.option(
     "--offset",

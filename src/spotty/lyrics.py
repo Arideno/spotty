@@ -1,11 +1,13 @@
 import re
+from importlib.metadata import version
+
 import requests
 from concurrent.futures import ThreadPoolExecutor
 
 from . import cache
 from .types import LyricLine
 
-_HEADERS = {"User-Agent": "spotty-cli/0.0.6"}
+_HEADERS = {"User-Agent": f"spotty-cli/{version('spotty-cli')}"}
 _MAX_BYTES = 2_000_000
 
 
